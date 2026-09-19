@@ -251,7 +251,8 @@ module basic_cavity(num_x, num_y, num_z, fingerslide=default_fingerslide,
     }
   }
   
-  // cut away side lips if num_x is less than 1
+  // cut away the side lips if num_x is less than 1, otherwise the lip on each
+  // long side eats most of the opening on a narrow bin
   if (num_x < 1) {
     hull() for (x=[-gridfinity_pitch/2+1.5+0.25+wall_thickness, -gridfinity_pitch/2+num_x*gridfinity_pitch-1.5-0.25-wall_thickness])
     for (y=[-10, (num_y-0.5)*gridfinity_pitch-seventeen])
@@ -259,36 +260,27 @@ module basic_cavity(num_x, num_y, num_z, fingerslide=default_fingerslide,
     cylinder(d=3, h=7*num_z, $fn=24);
   }
   
+  // same again for a shallow bin, cutting away the end lips
+  if (num_y < 1) {
+    hull() for (y=[-gridfinity_pitch/2+1.5+0.25+wall_thickness, -gridfinity_pitch/2+num_y*gridfinity_pitch-1.5-0.25-wall_thickness])
+    for (x=[-10, (num_x-0.5)*gridfinity_pitch-seventeen])
+    translate([x, y, (floorht+7*num_z)/2])
+    cylinder(d=3, h=7*num_z, $fn=24);
+  }
+  
   if (efloor) {
-    if (num_x < 1) {
-      gridcopy(1, num_y) {
-        tz(floor_thickness) intersection() {
-          hull() cornercopy(seventeen-0.5) cylinder(r=1, h=5, $fn=32);
-          translate([gridfinity_pitch*(-1+num_x), 0, 0]) hull() cornercopy(seventeen-0.5) cylinder(r=1, h=5, $fn=32);
-        }
-      
-        // tapered top portion
-        intersection() {
-          hull() {
-            tz(3) cornercopy(seventeen-0.5) cylinder(r=1, h=1, $fn=32);
-            tz(5) cornercopy(seventeen+2.5-1.15-q) cylinder(r=1.15+q, h=4, $fn=32);
-          }
-          translate([gridfinity_pitch*(-1+num_x), 0, 0]) hull() {
-            tz(3) cornercopy(seventeen-0.5) cylinder(r=1, h=1, $fn=32);
-            tz(5) cornercopy(seventeen+2.5-1.15-q) cylinder(r=1.15+q, h=4, $fn=32);
-          }
-        }
-      }
-    }
-    else {
-      // establishes floor
-      gridcopy(num_x, num_y) hull() tz(floor_thickness) cornercopy(seventeen-0.5) cylinder(r=1, h=5, $fn=32);
-      
-      // tapered top portion
-      gridcopy(num_x, num_y) hull() {
-        tz(3) cornercopy(seventeen-0.5) cylinder(r=1, h=1, $fn=32);
-        tz(5-(+2.5-1.15-q)) cornercopy(seventeen) cylinder(r=1.15+q, h=4, $fn=32);
-      }
+    // gridcopy_partial trims a partial row/column to size, so fractional
+    // bin sizes get a correspondingly narrow pocket rather than a full one
+    
+    // establishes floor
+    gridcopy_partial(num_x, num_y) 
+    hull() tz(floor_thickness) cornercopy(seventeen-0.5) cylinder(r=1, h=5, $fn=32);
+    
+    // tapered top portion
+    gridcopy_partial(num_x, num_y) 
+    hull() {
+      tz(3) cornercopy(seventeen-0.5) cylinder(r=1, h=1, $fn=32);
+      tz(5-(+2.5-1.15-q)) cornercopy(seventeen) cylinder(r=1.15+q, h=4, $fn=32);
     }
   }
 }

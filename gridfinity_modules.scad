@@ -72,53 +72,72 @@ module grid_block(num_x=1, num_y=1, num_z=2, magnet_diameter=6.5, screw_depth=6,
 }
 
 
-module pad_grid(num_x, num_y, half_pitch=false) {
-  // if num_x (or num_y) is less than 1 (or less than 0.5 if half_pitch is enabled) then round over the far side
-  cut_far_x = (num_x < 1 && !half_pitch) || (num_x < 0.5);
-  cut_far_y = (num_y < 1 && !half_pitch) || (num_y < 0.5);
-  
-  if (half_pitch) {
-    gridcopy(ceil(num_x), ceil(num_y)) intersection() {
-      pad_halfsize();
+// Copy children into every cell of a grid whose last row/column may be partial.
+// Children must be one cell's geometry, `step` grid units square, anchored with
+// its lower-left corner at (-gridfinity_pitch/2, -gridfinity_pitch/2).
+// A partial final row/column is trimmed by intersecting with a shifted copy of
+// the same geometry, so the cut edge is rounded over the way a full cell is
+// rather than being sliced off square.
+module gridcopy_partial(num_x, num_y, step=1) {
+  eps = 0.0001;  // tolerance so that e.g. 1.5 units at step 0.5 counts as exact
+  nx = ceil(num_x/step - eps);
+  ny = ceil(num_y/step - eps);
+  // size of the final cell along each axis, in grid units (== step if it is full)
+  frac_x = num_x - (nx-1)*step;
+  frac_y = num_y - (ny-1)*step;
+
+  for (xi=[1:nx]) for (yi=[1:ny]) {
+    cut_far_x = xi == nx && frac_x < step - eps;
+    cut_far_y = yi == ny && frac_y < step - eps;
+
+    translate([gridfinity_pitch*step*(xi-1), gridfinity_pitch*step*(yi-1), 0])
+    intersection() {
+      children();
       if (cut_far_x) {
-        translate([gridfinity_pitch*(-0.5+num_x), 0, 0]) pad_halfsize();
+        translate([gridfinity_pitch*(frac_x-step), 0, 0]) children();
       }
       if (cut_far_y) {
-        translate([0, gridfinity_pitch*(-0.5+num_y), 0]) pad_halfsize();
+        translate([0, gridfinity_pitch*(frac_y-step), 0]) children();
       }
       if (cut_far_x && cut_far_y) {
         // without this the far corner would be rectangular
-        translate([gridfinity_pitch*(-0.5+num_x), gridfinity_pitch*(-0.5+num_y), 0]) pad_halfsize();
-      }
-    }
-  }
-  else {
-    gridcopy(ceil(num_x), ceil(num_y)) intersection() {
-      pad_oversize();
-      if (cut_far_x) {
-        translate([gridfinity_pitch*(-1+num_x), 0, 0]) pad_oversize();
-      }
-      if (cut_far_y) {
-        translate([0, gridfinity_pitch*(-1+num_y), 0]) pad_oversize();
-      }
-      if (cut_far_x && cut_far_y) {
-        // without this the far corner would be rectangular
-        translate([gridfinity_pitch*(-1+num_x), gridfinity_pitch*(-1+num_y), 0]) pad_oversize();
+        translate([gridfinity_pitch*(frac_x-step), gridfinity_pitch*(frac_y-step), 0]) children();
       }
     }
   }
 }
 
 
-module pad_halfsize() {
-  render()  // render here to keep tree from blowing up
-  for (xi=[0:1]) for (yi=[0:1]) translate([xi*gridfinity_pitch/2, yi*gridfinity_pitch/2, 0])
-  intersection() {
+module pad_grid(num_x, num_y, half_pitch=false) {
+  step = half_pitch ? 0.5 : 1;
+  gridcopy_partial(num_x, num_y, step) pad_cell(step);
+}
+
+
+// One base pad, `step` grid units square. A full-size pad is centred on the
+// origin; a half-pitch pad is the lower-left quadrant of one, so both are
+// anchored at (-gridfinity_pitch/2, -gridfinity_pitch/2) and tile the same way.
+module pad_cell(step=1) {
+  if (step >= 1) {
     pad_oversize();
-    translate([-gridfinity_pitch/2, 0, 0]) pad_oversize();
-    translate([0, -gridfinity_pitch/2, 0]) pad_oversize();
-    translate([-gridfinity_pitch/2, -gridfinity_pitch/2, 0]) pad_oversize();
   }
+  else {
+    render()  // render here to keep tree from blowing up
+    intersection() {
+      pad_oversize();
+      translate([-gridfinity_pitch/2, 0, 0]) pad_oversize();
+      translate([0, -gridfinity_pitch/2, 0]) pad_oversize();
+      translate([-gridfinity_pitch/2, -gridfinity_pitch/2, 0]) pad_oversize();
+    }
+  }
+}
+
+
+// one full-size cell's worth of half-pitch pads
+module pad_halfsize() {
+  for (xi=[0:1]) for (yi=[0:1]) 
+  translate([xi*gridfinity_pitch/2, yi*gridfinity_pitch/2, 0]) 
+  pad_cell(0.5);
 }
 
 // like a cylinder but produces a square solid instead of a round one
