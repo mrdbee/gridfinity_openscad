@@ -2,9 +2,9 @@
 use <gridfinity_cup_modules.scad>
 
 // X dimension in grid units
-width = 2; // [ 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 ]
+width = 2; // [ 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13 ]
 // Y dimension in grid units
-depth = 1; // [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 ]
+depth = 1; // [ 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13 ]
 // Z dimension (multiples of 7mm)
 height = 3;
 // (Zack's design uses magnet diameter of 6.5)
@@ -37,8 +37,16 @@ irregular_subdivisions = false;
 half_pitch = false;
 // Remove some or all of lip
 lip_style = "normal";  // [ "normal", "reduced", "none" ]
+// Which end a partial (half-unit) column sits at, for half-unit widths
+partial_column = "right";  // [ "right", "left" ]
+// Which end a partial (half-unit) row sits at, for half-unit depths.
+// Use "front" when the baseplate's half row is at the near edge.
+partial_row = "back";  // [ "back", "front" ]
 
 module end_of_customizer_opts() {}
+
+near_x = partial_column == "left";
+near_y = partial_row == "front";
 
 // Separator positions are defined in terms of grid units from the left end
 separator_positions = [ 0.25, 0.5, 1.4 ];
@@ -46,7 +54,8 @@ separator_positions = [ 0.25, 0.5, 1.4 ];
 if (filled_in) {
   grid_block(width, depth, height, magnet_diameter=magnet_diameter, 
     screw_depth=screw_depth, hole_overhang_remedy=hole_overhang_remedy,
-    half_pitch=half_pitch, box_corner_attachments_only=box_corner_attachments_only);
+    half_pitch=half_pitch, box_corner_attachments_only=box_corner_attachments_only,
+    near_x=near_x, near_y=near_y);
 }
 else if (irregular_subdivisions) {
   irregular_cup(
@@ -64,7 +73,9 @@ else if (irregular_subdivisions) {
     separator_positions=separator_positions,
     half_pitch=half_pitch,
     lip_style=lip_style,
-    box_corner_attachments_only=box_corner_attachments_only
+    box_corner_attachments_only=box_corner_attachments_only,
+    near_x=near_x,
+    near_y=near_y
   );
 }
 else {
@@ -84,6 +95,8 @@ else {
     efficient_floor=efficient_floor,
     half_pitch=half_pitch,
     lip_style=lip_style,
-    box_corner_attachments_only=box_corner_attachments_only
+    box_corner_attachments_only=box_corner_attachments_only,
+    near_x=near_x,
+    near_y=near_y
   );
 }

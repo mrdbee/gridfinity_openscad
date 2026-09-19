@@ -18,7 +18,7 @@ Options for bins:
 * Label feature can be left-justified, right-justified, or centered
 * Magnet/screw hole can have printable overhangs as an option (if screw holes and magnet pockets are both used) (similar in spirit to [this](https://www.printables.com/model/269834-gridfinity-template-modified-for-mid-air-holes))
 * Option for material-efficient floor that is not flat but saves material/time (similar in spirit to [this](https://www.printables.com/model/265271-gridfinity-lite-economical-plain-storage-bins))
-* Fractional-width bins (0.5 units) supported (similar in spirit to [this](https://www.printables.com/model/241907-gridfinity-half-boxes-up-to-3-grids-long-and-6u-hi))
+* Half-unit bins supported on both axes, in 0.5 increments (0.5, 1.5, 2.5, ... on X and on Y), with the partial base pad rounded over so it still seats in a standard baseplate (similar in spirit to [this](https://www.printables.com/model/241907-gridfinity-half-boxes-up-to-3-grids-long-and-6u-hi))
 
 [<img src="./Images/customizer.png">]()
 
