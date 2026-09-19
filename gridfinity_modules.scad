@@ -9,7 +9,7 @@ sharp_corners = 0;
 
 // basic block with cutout in top to be stackable, optional holes in bottom
 // start with this and begin 'carving'
-module grid_block(num_x=1, num_y=1, num_z=2, magnet_diameter=6.5, screw_depth=6, center=false, hole_overhang_remedy=false, half_pitch=false, box_corner_attachments_only = false) {
+module grid_block(num_x=1, num_y=1, num_z=2, magnet_diameter=6.5, screw_depth=6, center=false, hole_overhang_remedy=false, half_pitch=false, box_corner_attachments_only = false, near_x=false, near_y=false) {
   corner_radius = 3.75;
   outer_size = gridfinity_pitch - gridfinity_clearance;  // typically 41.5
   block_corner_position = outer_size/2 - corner_radius;  // need not match center of pad corners
@@ -19,6 +19,12 @@ module grid_block(num_x=1, num_y=1, num_z=2, magnet_diameter=6.5, screw_depth=6,
   gp = gridfinity_pitch;
   
   suppress_holes = num_x < 1 || num_y < 1;
+  
+  // Attachments sit on the full-unit lattice, which shifts when a partial
+  // row/column is placed at the near end. A partial cell is skipped: it is
+  // half a unit across, and the pair of holes spans more than that.
+  hole_cells_x = [ for (c = partial_cells(num_x, 1, near_x)) if (c[1] >= 1 - 0.0001) c ];
+  hole_cells_y = [ for (c = partial_cells(num_y, 1, near_y)) if (c[1] >= 1 - 0.0001) c ];
   
   emd = suppress_holes ? 0 : magnet_diameter; // effective magnet diameter after override
   esd = suppress_holes ? 0 : screw_depth;     // effective screw depth after override
@@ -32,7 +38,7 @@ module grid_block(num_x=1, num_y=1, num_z=2, magnet_diameter=6.5, screw_depth=6,
     intersection() {
       union() {
         // logic for constructing odd-size grids of possibly half-pitch pads
-        pad_grid(num_x, num_y, half_pitch);
+        pad_grid(num_x, num_y, half_pitch, near_x, near_y);
         // main body will be cut down afterward
         translate([-gridfinity_pitch/2, -gridfinity_pitch/2, 5]) 
         cube([gridfinity_pitch*num_x, gridfinity_pitch*num_y, totalht-5]);
@@ -51,17 +57,17 @@ module grid_block(num_x=1, num_y=1, num_z=2, magnet_diameter=6.5, screw_depth=6,
       pad_oversize(num_x, num_y, 1);
     
     if (esd > 0) {  // add pockets for screws if requested
-      gridcopycorners(ceil(num_x), ceil(num_y), magnet_position, box_corner_attachments_only)
+      gridcopycorners(hole_cells_x, hole_cells_y, magnet_position, box_corner_attachments_only)
       translate([0, 0, -0.1]) cylinder(d=screw_hole_diam, h=esd+0.1, $fn=28);
     }
     
     if (emd > 0) {  // add pockets for magnets if requested
-      gridcopycorners(ceil(num_x), ceil(num_y), magnet_position, box_corner_attachments_only)
+      gridcopycorners(hole_cells_x, hole_cells_y, magnet_position, box_corner_attachments_only)
       translate([0, 0, -0.1]) cylinder(d=emd, h=magnet_thickness+0.1, $fn=41);
     }
     
     if (overhang_fix) {  // people seem to really like this overhang fix
-      gridcopycorners(ceil(num_x), ceil(num_y), magnet_position, box_corner_attachments_only)
+      gridcopycorners(hole_cells_x, hole_cells_y, magnet_position, box_corner_attachments_only)
       translate([0, 0, magnet_thickness-0.1]) 
       render() intersection() {  // for some reason OpenSCAD blows up if I don't render here
         translate([-emd/2, -screw_hole_diam/2, 0]) cube([emd, screw_hole_diam, overhang_fix_depth+0.1]);
@@ -72,45 +78,56 @@ module grid_block(num_x=1, num_y=1, num_z=2, magnet_diameter=6.5, screw_depth=6,
 }
 
 
-// Copy children into every cell of a grid whose last row/column may be partial.
+// Divide an axis of `num` grid units into cells of at most `step` units,
+// returning [low edge, size] per cell in grid units. One cell may be partial;
+// `near` puts it at the low end of the axis instead of the high end, which is
+// what lets a half-unit bin line up with a baseplate whose half row is at the
+// near edge.
+function partial_cells(num, step=1, near=false) =
+  let (eps  = 0.0001,
+       n    = ceil(num/step - eps),
+       frac = num - (n-1)*step)
+  near
+    ? [ for (i=[0:n-1]) i == 0 ? [0, frac] : [frac + (i-1)*step, step] ]
+    : [ for (i=[0:n-1]) [i*step, i == n-1 ? frac : step] ];
+
+
+// Copy children into every cell of a grid that may contain a partial row/column.
 // Children must be one cell's geometry, `step` grid units square, anchored with
 // its lower-left corner at (-gridfinity_pitch/2, -gridfinity_pitch/2).
-// A partial final row/column is trimmed by intersecting with a shifted copy of
-// the same geometry, so the cut edge is rounded over the way a full cell is
-// rather than being sliced off square.
-module gridcopy_partial(num_x, num_y, step=1) {
-  eps = 0.0001;  // tolerance so that e.g. 1.5 units at step 0.5 counts as exact
-  nx = ceil(num_x/step - eps);
-  ny = ceil(num_y/step - eps);
-  // size of the final cell along each axis, in grid units (== step if it is full)
-  frac_x = num_x - (nx-1)*step;
-  frac_y = num_y - (ny-1)*step;
+// A partial cell is trimmed by intersecting with a shifted copy of the same
+// geometry, so the cut edge is rounded over the way a full cell is rather than
+// being sliced off square.
+module gridcopy_partial(num_x, num_y, step=1, near_x=false, near_y=false) {
+  eps = 0.0001;
+  cells_x = partial_cells(num_x, step, near_x);
+  cells_y = partial_cells(num_y, step, near_y);
 
-  for (xi=[1:nx]) for (yi=[1:ny]) {
-    cut_far_x = xi == nx && frac_x < step - eps;
-    cut_far_y = yi == ny && frac_y < step - eps;
+  for (cx = cells_x) for (cy = cells_y) {
+    cut_far_x = cx[1] < step - eps;
+    cut_far_y = cy[1] < step - eps;
 
-    translate([gridfinity_pitch*step*(xi-1), gridfinity_pitch*step*(yi-1), 0])
+    translate([gridfinity_pitch*cx[0], gridfinity_pitch*cy[0], 0])
     intersection() {
       children();
       if (cut_far_x) {
-        translate([gridfinity_pitch*(frac_x-step), 0, 0]) children();
+        translate([gridfinity_pitch*(cx[1]-step), 0, 0]) children();
       }
       if (cut_far_y) {
-        translate([0, gridfinity_pitch*(frac_y-step), 0]) children();
+        translate([0, gridfinity_pitch*(cy[1]-step), 0]) children();
       }
       if (cut_far_x && cut_far_y) {
         // without this the far corner would be rectangular
-        translate([gridfinity_pitch*(frac_x-step), gridfinity_pitch*(frac_y-step), 0]) children();
+        translate([gridfinity_pitch*(cx[1]-step), gridfinity_pitch*(cy[1]-step), 0]) children();
       }
     }
   }
 }
 
 
-module pad_grid(num_x, num_y, half_pitch=false) {
+module pad_grid(num_x, num_y, half_pitch=false, near_x=false, near_y=false) {
   step = half_pitch ? 0.5 : 1;
-  gridcopy_partial(num_x, num_y, step) pad_cell(step);
+  gridcopy_partial(num_x, num_y, step, near_x, near_y) pad_cell(step);
 }
 
 
@@ -199,17 +216,23 @@ module pad_oversize(num_x=1, num_y=1, margins=0) {
   }
 }
 
-// similar to cornercopy, can only copy to box corners
-module gridcopycorners(num_x, num_y, r, onlyBoxCorners = false) {
-  for (xi=[1:num_x]) for (yi=[1:num_y]) 
-    for (xx=[-1, 1]) for (yy=[-1, 1]) 
-      if(!onlyBoxCorners || 
-        (xi == 1 && yi == 1 && xx == -1 && yy == -1) ||
-        (xi == num_x && yi == num_y && xx == 1 && yy == 1) ||
-        (xi == 1 && yi == num_y && xx == -1 && yy == 1) ||
-        (xi == num_x && yi == 1 && xx == 1 && yy == -1))  
-        translate([gridfinity_pitch*(xi-1), gridfinity_pitch*(yi-1), 0]) 
-        translate([xx*r, yy*r, 0]) children();
+// similar to cornercopy, can only copy to box corners.
+// cells_x/cells_y are [low edge, size] lists as returned by partial_cells, so
+// the copies follow the cell lattice even when it is shifted by a partial cell.
+module gridcopycorners(cells_x, cells_y, r, onlyBoxCorners = false) {
+  nx = len(cells_x);
+  ny = len(cells_y);
+  if (nx > 0 && ny > 0) {
+    for (xi=[0:nx-1]) for (yi=[0:ny-1]) 
+      for (xx=[-1, 1]) for (yy=[-1, 1]) 
+        if(!onlyBoxCorners || 
+          (xi == 0 && yi == 0 && xx == -1 && yy == -1) ||
+          (xi == nx-1 && yi == ny-1 && xx == 1 && yy == 1) ||
+          (xi == 0 && yi == ny-1 && xx == -1 && yy == 1) ||
+          (xi == nx-1 && yi == 0 && xx == 1 && yy == -1))  
+          translate([gridfinity_pitch*cells_x[xi][0], gridfinity_pitch*cells_y[yi][0], 0]) 
+          translate([xx*r, yy*r, 0]) children();
+  }
 }
 
 // similar to quadtranslate but expands to extremities of a block
