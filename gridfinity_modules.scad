@@ -242,6 +242,19 @@ module cornercopy(r, num_x=1, num_y=1) {
 }
 
 
+// copy children to each listed cell, without trimming anything.
+// cells are [low edge, size] entries as returned by partial_cells.
+module gridcopy_cells(cells_x, cells_y) {
+  for (cx = cells_x) for (cy = cells_y)
+    translate([gridfinity_pitch*cx[0], gridfinity_pitch*cy[0], 0]) children();
+}
+
+
+// the full-unit cells of an axis, skipping a partial one
+function full_cells(num, near=false) =
+  [ for (c = partial_cells(num, 1, near)) if (c[1] >= 1 - 0.0001) c ];
+
+
 // make repeated copies of something(s) at the gridfinity spacing of 42mm
 module gridcopy(num_x, num_y) {
   for (xi=[1:num_x]) for (yi=[1:num_y]) translate([gridfinity_pitch*(xi-1), gridfinity_pitch*(yi-1), 0]) children();
